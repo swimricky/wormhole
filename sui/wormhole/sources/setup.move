@@ -23,9 +23,10 @@ module wormhole::setup {
     /// `DeployerCap` to sender.
     ///
     /// Only `setup::init_and_share_state` requires `DeployerCap`.
-    fun init(ctx: &mut TxContext) {
+    fun init(ctx: &mut TxContext): DeployerCap {
         let deployer = DeployerCap { id: object::new(ctx) };
-        transfer::transfer(deployer, tx_context::sender(ctx));
+        //transfer::transfer(deployer, tx_context::sender(ctx));
+        deployer
     }
 
     #[test_only]
@@ -33,8 +34,8 @@ module wormhole::setup {
         // NOTE: This exists to mock up sui::package for proposed upgrades.
         use wormhole::dummy_sui_package::{Self as package};
 
-        init(ctx);
-
+        let w = init(ctx);
+        transfer::transfer(w, tx_context::sender(ctx));
         // This will be created and sent to the transaction sender
         // automatically when the contract is published.
         transfer::transfer(

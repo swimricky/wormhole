@@ -1,14 +1,11 @@
 [package]
-name = "Wormhole"
+name = "Programmable"
 version = "0.0.1"
 
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
-subdir = "crates/sui-framework"
+subdir = "crates/sui-framework/packages/sui-framework"
 rev = "devnet"
 
 [addresses]
-wormhole = "_"
-
-[dev-addresses]
-wormhole = "0x100"
+programmable = "0x0"
