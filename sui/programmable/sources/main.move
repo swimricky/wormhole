@@ -1,31 +1,39 @@
 module programmable::state {
-    use sui::object::{Self, UID};
-    use sui::transfer::{Self};
+    use sui::object::{Self};
     use sui::tx_context::{TxContext};
-
-    struct Village has key {
-        id: UID,
-        persons: u64
-    }
+    use sui::transfer::{Self};
+    use sui::event::{Self};
 
     struct A has drop {
         A: u64,
     }
 
-    struct B has drop {
+    struct B has copy, drop {
         B: u64
     }
 
-    fun init(ctx: &mut TxContext) {
-        let village = Village{id: object::new(ctx), persons: 6};
-        transfer::share_object(village);
+    struct State has key {
+        id: object::UID,
+        counter: u64,
     }
 
-    public fun produce_A(): A{
+    fun init(ctx: &mut TxContext){
+        transfer::share_object(State {id: object::new(ctx), counter: 0});
+    }
+
+    public fun produce_A(state: &mut State): A{
+        state.counter = state.counter + 1;
         return A{A: 6}
     }
 
-    public fun consume_A_produce_B(_A: A): B {
+    public fun consume_A_produce_B(_A: A, state: &mut State): B {
+        state.counter = state.counter + 1;
         return B{B:9}
+    }
+
+     public fun consume_B_produce_int(_B: B, state: &mut State): u64 {
+        state.counter = state.counter + 1;
+        event::emit(B{B:100});
+        return 42
     }
 }
