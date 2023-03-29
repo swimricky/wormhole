@@ -41,6 +41,7 @@ async function moveCall(){
   console.log(w)
 }
 
+// Example of using programmable transactions to chain move calls.
 async function chainMoveCalls(){
   const signer = getSigner();
   const tx = new TransactionBlock();
