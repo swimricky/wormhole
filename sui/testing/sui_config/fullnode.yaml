@@ -1,0 +1,50 @@
+---
+protocol-key-pair:
+  value: NHMsH+KzuWOvnNnr0sUzkQKn+8K3E5ScnlJLEutRhoo=
+worker-key-pair:
+  value: AHgnLuBZnwOuyOoENC5FwL3y8m+t3jOnDilifh0ji54P
+account-key-pair:
+  value: AHddlzxdcHC0R+BaMZyI2NOoksvplmTzNy0jKy/edXEJ
+network-key-pair:
+  value: AMu3j/7XHgjZmx4Yucj5wuDLSGdE3LtawtZEJGHZ4yN5
+db-path: sui_config/authorities_db/full_node_db
+network-address: /ip4/127.0.0.1/tcp/36993/http
+json-rpc-address: "0.0.0.0:9000"
+metrics-address: "127.0.0.1:39699"
+admin-interface-port: 34109
+enable-event-processing: true
+grpc-load-shed: ~
+grpc-concurrency-limit: ~
+p2p-config:
+  listen-address: "127.0.0.1:41863"
+  external-address: /ip4/127.0.0.1/udp/41863
+  seed-peers:
+    - peer-id: 40329d50b1214747d767082287d13197c1b75df7390cbf88f98bb856d89d9c41
+      address: /ip4/127.0.0.1/udp/44097
+    - peer-id: fa2d771a198b0769786e918b7322f2d76a1c3d69ee4aa167277bd4688e6a3f89
+      address: /ip4/127.0.0.1/udp/36959
+    - peer-id: 877aa22b49b1335c882461a3229aad07b38f0cf5e811c162f28a34314dfe60e0
+      address: /ip4/127.0.0.1/udp/38407
+    - peer-id: 961f2c1ecf836fd1455b1001fb162a0d4379db306c7ed46c47dc6cd5d1056081
+      address: /ip4/127.0.0.1/udp/36497
+genesis:
+  genesis-file-location: sui_config/genesis.blob
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 2
+  max-checkpoints-in-batch: 200
+  max-transactions-in-batch: 1000
+  use-range-deletion: true
+end-of-epoch-broadcast-channel-capacity: 128
+checkpoint-executor-config:
+  checkpoint-execution-max-concurrency: 200
+  local-execution-timeout-sec: 10
+db-checkpoint-config:
+  perform-db-checkpoints-at-epoch-end: false
+indirect-objects-threshold: 18446744073709551615
+expensive-safety-check-config:
+  enable-epoch-sui-conservation-check: false
+  force-disable-epoch-sui-conservation-check: false
+  enable-state-consistency-check: false
+  force-disable-state-consistency-check: false
