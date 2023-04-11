@@ -84,7 +84,7 @@ func TestBodyTokenBridgeRegisterChainSerialize(t *testing.T) {
 			name:     "panic_at_the_disco!",
 			panic:    true,
 			object:   BodyTokenBridgeRegisterChain{Module: "123456789012345678901234567890123", ChainID: 1, EmitterAddress: addr},
-			expected: "module longer than 32 byte",
+			expected: "payload longer than 32 bytes",
 		},
 	}
 	for _, testCase := range tests {
@@ -148,4 +148,16 @@ func TestBodyCircleIntegrationUpgradeContractImplementationSerialize(t *testing.
 		NewImplementationAddress: addr,
 	}
 	assert.Equal(t, expected, hex.EncodeToString(bodyCircleIntegrationUpgradeContractImplementation.Serialize()))
+}
+
+func TestBodyIbcReceiverUpdateChainConnection(t *testing.T) {
+	expected := "000000000000000000000000000000000000000000496263526563656976657201000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000636f6e6e656374696f6e2d300013"
+
+	connectionId := GetIbcConnectionIdBytes("connection-0")
+
+	bodyIbcReceiverUpdateChainConnection := BodyIbcReceiverUpdateChainConnection{
+		ConnectionId: connectionId,
+		ChainId:      ChainIDInjective,
+	}
+	assert.Equal(t, expected, hex.EncodeToString(bodyIbcReceiverUpdateChainConnection.Serialize()))
 }
