@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache 2
 
-/// This module implements an entry method intended to be called after an
+/// This module implements a public method intended to be called after an
 /// upgrade has been commited. The purpose is to add one-off migration logic
 /// that would alter Wormhole `State`.
 ///
