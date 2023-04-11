@@ -2,6 +2,8 @@
 
 #[test_only]
 module coins::coin {
+    use sui::object::{Self};
+    use sui::package::{Self};
     use sui::transfer::{Self};
     use sui::tx_context::{Self, TxContext};
 
@@ -52,12 +54,20 @@ module coins::coin {
     /// with the same macro  as a trick to allow another method within this
     /// module to call `init` using OTW.
     public fun init_test_only(ctx: &mut TxContext) {
-        init(COIN {}, ctx)
+        init(COIN {}, ctx);
+
+        // This will be created and sent to the transaction sender
+        // automatically when the contract is published.
+        transfer::public_transfer(
+            package::test_publish(object::id_from_address(@coins), ctx),
+            tx_context::sender(ctx)
+        );
     }
 }
 
 #[test_only]
 module coins::coin_tests {
+    use sui::package::{UpgradeCap};
     use sui::test_scenario::{Self};
     use token_bridge::asset_meta::{Self};
     use token_bridge::create_wrapped::{Self, WrappedAssetSetup};
@@ -119,6 +129,10 @@ module coins::coin_tests {
             &mut token_bridge_state,
             &worm_state,
             wrapped_asset_setup,
+            test_scenario::take_from_address<UpgradeCap>(
+                scenario,
+                coin_deployer
+            ),
             &the_clock,
             test_scenario::ctx(scenario)
         );

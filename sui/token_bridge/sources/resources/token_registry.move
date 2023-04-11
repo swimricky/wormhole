@@ -10,6 +10,7 @@ module token_bridge::token_registry {
     use sui::coin::{CoinMetadata};
     use sui::dynamic_field::{Self};
     use sui::object::{Self, UID};
+    use sui::package::{UpgradeCap};
     use sui::tx_context::{TxContext};
     use wormhole::external_address::{ExternalAddress};
 
@@ -160,6 +161,7 @@ module token_bridge::token_registry {
         self: &mut TokenRegistry,
         token_meta: AssetMeta,
         supply: Supply<CoinType>,
+        upgrade_cap: UpgradeCap,
         ctx: &mut TxContext
     ): ExternalAddress {
         // Grab canonical token address for return value.
@@ -172,7 +174,7 @@ module token_bridge::token_registry {
         // `Supply` is globally unique and can only be created once, there is no
         // risk that `add_new_wrapped` can be called again on the same coin
         // type.
-        let asset = wrapped_asset::new(token_meta, supply, ctx);
+        let asset = wrapped_asset::new(token_meta, supply, upgrade_cap, ctx);
         dynamic_field::add(&mut self.id, Key<CoinType> {}, asset);
         self.num_wrapped = self.num_wrapped + 1;
 
@@ -186,7 +188,16 @@ module token_bridge::token_registry {
         supply: Supply<CoinType>,
         ctx: &mut TxContext
     ): ExternalAddress {
-        add_new_wrapped(self, token_meta, supply, ctx)
+        add_new_wrapped(
+            self,
+            token_meta,
+            supply,
+            sui::package::test_publish(
+                object::id_from_address(@token_bridge),
+                ctx
+            ),
+            ctx
+        )
     }
 
     /// Add a new native asset to the registry and return the canonical token
