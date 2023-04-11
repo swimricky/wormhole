@@ -85,6 +85,7 @@ describe(" 1. Wormhole", () => {
 
           // Execution cost ~57k
           tx.setGasBudget(60_000);
+
           const eventData = await wallet
             .signAndExecuteTransactionBlock({
               transactionBlock: tx,
