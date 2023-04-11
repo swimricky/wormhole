@@ -1,5 +1,5 @@
 # syntax=docker.io/docker/dockerfile:1.3@sha256:42399d4635eddd7a9b8a24be879d2f9a930d0ed040a61324cfdf59ef1357b3b2
-FROM --platform=linux/amd64 docker.io/golang:1.19.3@sha256:dc76ef03e54c34a00dcdca81e55c242d24b34d231637776c4bb5c1a8e8514253 AS build
+FROM --platform=linux/amd64 docker.io/golang:1.20.3@sha256:23050c2510e0a920d66b48afdc40043bcfe2e25d044a2d7b33475632d83ab6c7 AS build
 # libwasmvm.so is not compatible with arm
 
 # Support additional root CAs
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.cache --mount=type=cache,target=/go \
   cd node && \
   go build ${GO_BUILD_ARGS} -gcflags="all=-N -l" --ldflags '-extldflags "-Wl,--allow-multiple-definition" -X "github.com/certusone/wormhole/node/cmd/guardiand.Build=dev"' -mod=readonly -o /guardiand github.com/certusone/wormhole/node && \
   go get github.com/CosmWasm/wasmvm@v1.1.1 && \
-  cp /go/pkg/mod/github.com/!cosm!wasm/wasmvm@v1.1.1/internal/api/libwasmvm.x86_64.so /usr/lib/  
+  cp /go/pkg/mod/github.com/!cosm!wasm/wasmvm@v1.1.1/internal/api/libwasmvm.x86_64.so /usr/lib/
 
 # Only export the final binary (+ shared objects). This reduces the image size
 # from ~1GB to ~150MB.
