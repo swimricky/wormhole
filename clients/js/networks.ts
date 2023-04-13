@@ -233,7 +233,7 @@ const TESTNET = {
     key: get_env_var("APTOS_TESTNET"),
   },
   sui: {
-    rpc: "https://fullnode.devnet.sui.io:443",
+    rpc: "https://fullnode.testnet.sui.io:443",
     key: get_env_var("SUI_KEY_TESTNET"),
   },
   pythnet: {
