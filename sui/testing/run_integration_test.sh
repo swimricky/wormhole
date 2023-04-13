@@ -20,12 +20,12 @@ sleep 1
 echo "$(date) :: deploying wormhole and token bridge"
 cd $TEST_DIR/..
 bash scripts/deploy.sh devnet \
-    -k AD7L+I2k8/xx3kdh1sIdhN0LJqPptRGhKZMugxcS+xh2 > /dev/null 2>&1
+    -k AD7L+I2k8/xx3kdh1sIdhN0LJqPptRGhKZMugxcS+xh2 > deploy.out 2>&1
 cd testing
 
 ## run contract tests here
 echo "$(date) :: running tests"
-npx ts-mocha -t 1000000 $TEST_DIR/js/[0-9]*.ts
+npx ts-mocha -t 1000000 $TEST_DIR/js/*.ts
 
 # nuke
 echo "$(date) :: done"

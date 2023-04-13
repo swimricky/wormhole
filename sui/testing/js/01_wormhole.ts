@@ -1,10 +1,6 @@
 import { expect } from "chai";
 
-import {
-  WALLET_PRIVATE_KEY,
-  WORMHOLE_PACKAGE_ID,
-  WORMHOLE_STATE_ID,
-} from "./helpers/consts";
+import { WALLET_PRIVATE_KEY, WORMHOLE_STATE_ID } from "./helpers/consts";
 import {
   Ed25519Keypair,
   JsonRpcProvider,
@@ -13,6 +9,7 @@ import {
   SUI_CLOCK_OBJECT_ID,
   TransactionBlock,
 } from "@mysten/sui.js";
+import { getPackageId } from "./helpers/utils";
 
 describe(" 1. Wormhole", () => {
   const provider = new JsonRpcProvider(localnetConnection);
@@ -25,13 +22,18 @@ describe(" 1. Wormhole", () => {
 
   describe("Publish Message", () => {
     it("Check `WormholeMessage` Event", async () => {
+      const wormholePackage = await getPackageId(
+        wallet.provider,
+        WORMHOLE_STATE_ID
+      );
+
       const owner = await wallet.getAddress();
 
       // Create emitter cap.
       const emitterCapId = await (async () => {
         const tx = new TransactionBlock();
         const [emitterCap] = tx.moveCall({
-          target: `${WORMHOLE_PACKAGE_ID}::emitter::new`,
+          target: `${wormholePackage}::emitter::new`,
           arguments: [tx.object(WORMHOLE_STATE_ID)],
         });
         tx.transferObjects([emitterCap], tx.pure(owner));
@@ -61,18 +63,19 @@ describe(" 1. Wormhole", () => {
         const nonce = 69;
         const basePayload = "All your base are belong to us.";
 
-        // Save timestamp from last event.
-        let lastTimestamp = 0n;
+        const numMessages = 32;
+        const payloads: string[] = [];
+        const tx = new TransactionBlock();
 
-        // Construct transaction block.
-        for (let i = 0; i < 8; ++i) {
+        // Construct transaction block to send multiple messages.
+        for (let i = 0; i < numMessages; ++i) {
           // Make a unique message.
           const payload = basePayload + `... ${i}`;
+          payloads.push(payload);
 
-          const tx = new TransactionBlock();
           const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(0)]);
           tx.moveCall({
-            target: `${WORMHOLE_PACKAGE_ID}::publish_message::publish_message`,
+            target: `${wormholePackage}::publish_message::publish_message`,
             arguments: [
               tx.object(WORMHOLE_STATE_ID),
               tx.object(emitterCapId),
@@ -82,34 +85,26 @@ describe(" 1. Wormhole", () => {
               tx.object(SUI_CLOCK_OBJECT_ID),
             ],
           });
+        }
 
-          // Execution cost ~1.06m
-          //tx.setGasBudget(1_100_000);
+        const events = await wallet
+          .signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+            },
+          })
+          .then((result) => result.events!);
+        expect(events).has.length(numMessages);
 
-          const eventData = await wallet
-            .signAndExecuteTransactionBlock({
-              transactionBlock: tx,
-              options: {
-                showEvents: true,
-              },
-            })
-            .then((result) => {
-              if ("events" in result && result.events?.length == 1) {
-                return result.events[0];
-              }
-
-              throw new Error("event not found");
-            })
-            .then((event) => event.parsedJson!);
+        for (let i = 0; i < numMessages; ++i) {
+          const eventData = events[i].parsedJson!;
           expect(eventData.consistency_level).equals(0);
           expect(eventData.nonce).equals(nonce);
-          expect(eventData.payload).deep.equals([...Buffer.from(payload)]);
+          expect(eventData.payload).deep.equals([...Buffer.from(payloads[i])]);
           expect(eventData.sender).equals(emitterCapId);
           expect(eventData.sequence).equals(i.toString());
-
-          let timestamp = BigInt(eventData?.timestamp);
-          expect(timestamp >= lastTimestamp).is.true;
-          timestamp = lastTimestamp;
+          expect(BigInt(eventData.timestamp) > 0n).is.true;
         }
       }
     });
