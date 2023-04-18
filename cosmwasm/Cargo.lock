@@ -2152,7 +2152,7 @@ dependencies = [
  "serde_wormhole",
  "thiserror",
  "wormhole-bindings",
- "wormhole-core",
+ "wormhole-sdk",
 ]
 
 [[package]]
@@ -2186,19 +2186,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wormhole-sdk"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bstr",
- "schemars",
- "serde",
- "serde_wormhole",
- "sha3 0.10.6",
- "thiserror",
-]
-
-[[package]]
 name = "wormhole-ibc"
 version = "0.1.0"
 dependencies = [
@@ -2212,8 +2199,21 @@ dependencies = [
  "serde",
  "serde_wormhole",
  "thiserror",
- "wormhole-bridge-terra-2",
- "wormhole-core",
+ "wormhole-cosmwasm",
+ "wormhole-sdk",
+]
+
+[[package]]
+name = "wormhole-sdk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bstr",
+ "schemars",
+ "serde",
+ "serde_wormhole",
+ "sha3 0.10.6",
+ "thiserror",
 ]
 
 [[package]]
