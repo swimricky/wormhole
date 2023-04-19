@@ -3,8 +3,8 @@ name    = "wormhole_sdk"
 version = "0.2.0"
 edition = "2021"
 
-[lib]
-name = "wormhole_sdk"
+# [lib]
+# name = "wormhole_sdk"
 
 [features]
 schemars = ["dep:schemars"]
