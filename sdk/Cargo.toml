@@ -1,7 +1,6 @@
 [workspace]
 members = [
-    "rust/core",
-    "rust/serde_wormhole",
+    "./rust/*"
 ]
 
 [profile.release]
