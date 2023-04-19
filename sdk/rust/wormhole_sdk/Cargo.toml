@@ -1,5 +1,5 @@
 [package]
-name    = "wormhole-sdk"
+name    = "wormhole_sdk"
 version = "0.2.0"
 edition = "2021"
 

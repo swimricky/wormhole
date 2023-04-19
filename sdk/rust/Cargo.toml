@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "core",
+    "wormhole_sdk",
     "serde_wormhole",
 ]
 
@@ -10,4 +10,4 @@ lto = "thin"
 
 [patch.crates-io]
 serde_wormhole = { path = "serde_wormhole" }
-wormhole-sdk = { path = "core" }
+wormhole_sdk-sdk = { path = "wormhole_sdk" }
