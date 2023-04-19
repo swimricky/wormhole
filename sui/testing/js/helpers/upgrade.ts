@@ -7,12 +7,12 @@ import { buildForBytecode } from "./build";
 import { getPackageId } from "./utils";
 
 export async function buildAndUpgradeWormhole(
-  wallet: RawSigner,
+  signer: RawSigner,
   signedVaa: Buffer,
   wormholePath: string,
   wormholeStateId: string
 ) {
-  const wormholePackage = await getPackageId(wallet.provider, wormholeStateId);
+  const wormholePackage = await getPackageId(signer.provider, wormholeStateId);
 
   const tx = new TransactionBlock();
 
@@ -45,7 +45,25 @@ export async function buildAndUpgradeWormhole(
   // Gas ~215m.
   tx.setGasBudget(215_000_000n);
 
-  return wallet.signAndExecuteTransactionBlock({
+  return signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options: {
+      showEffects: true,
+      showEvents: true,
+    },
+  });
+}
+
+export async function migrate(signer: RawSigner, stateId: string) {
+  const contractPackage = await getPackageId(signer.provider, stateId);
+
+  const tx = new TransactionBlock();
+  tx.moveCall({
+    target: `${contractPackage}::migrate::migrate`,
+    arguments: [tx.object(stateId)],
+  });
+
+  return signer.signAndExecuteTransactionBlock({
     transactionBlock: tx,
     options: {
       showEffects: true,

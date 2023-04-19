@@ -47,8 +47,8 @@ describe(" 1. Wormhole", () => {
             },
           })
           .then((result) => {
-            let found = result.objectChanges?.filter(
-              (item) => "type" in item && "created" === item.type
+            const found = result.objectChanges?.filter(
+              (item) => "created" === item.type!
             );
             if (found?.length == 1 && "objectId" in found[0]) {
               return found[0].objectId;

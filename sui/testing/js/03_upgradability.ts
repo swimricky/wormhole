@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { execSync } from "child_process";
 import fs from "fs";
 import { resolve } from "path";
 import * as mock from "@certusone/wormhole-sdk/lib/cjs/mock";
@@ -9,17 +10,27 @@ import {
   RawSigner,
   SUI_CLOCK_OBJECT_ID,
   TransactionBlock,
+  TransactionEffects,
 } from "@mysten/sui.js";
 
-import { buildForDigest } from "./helpers/build";
+import { buildForBytecode, buildForDigest, EXEC_UTF8 } from "./helpers/build";
 import {
   GOVERNANCE_EMITTER,
+  KEYSTORE,
+  VERSION_WORMHOLE,
   WALLET_PRIVATE_KEY,
   WORMHOLE_STATE_ID,
 } from "./helpers/consts";
-import { generateVaaFromDigest } from "./helpers/setup";
-import { buildAndUpgradeWormhole } from "./helpers/upgrade";
+import {
+  cleanUpPackageDirectory,
+  generateVaaFromDigest,
+  modifyHardCodedVersionControl,
+  setUpWormholeDirectory,
+} from "./helpers/setup";
+import { buildAndUpgradeWormhole, migrate } from "./helpers/upgrade";
 import { getPackageId } from "./helpers/utils";
+import { MoveAbort } from "./helpers/error/moveAbort";
+import { parseWormholeError } from "./helpers/error/wormhole";
 
 describe(" 3. Upgradability", () => {
   const provider = new JsonRpcProvider(localnetConnection);
@@ -34,48 +45,17 @@ describe(" 3. Upgradability", () => {
   const governance = new mock.GovernanceEmitter(GOVERNANCE_EMITTER);
 
   // This directory is used to set up builds.
+  const srcWormholePath = resolve(`${__dirname}/../../wormhole`);
   const dstWormholePath = resolve(`${__dirname}/../wormhole`);
 
-  // Persisting variables across tests.
-  const localVariables: Map<string, any> = new Map();
+  before("Publish Wormhole", async () => {});
 
-  beforeEach(() => {
-    // Move contract directory to testing and prepare it for build.
-    const srcWormholePath = `${__dirname}/../../wormhole`;
-    fs.cpSync(srcWormholePath, dstWormholePath, { recursive: true });
-
-    // Remove irrelevant files. This part is not necessary, but is helpful
-    // for debugging a clean package directory.
-    const removeThese = [
-      "Move.devnet.toml",
-      "Move.lock",
-      "Makefile",
-      "README.md",
-      "build",
-    ];
-    for (const basename of removeThese) {
-      fs.rmSync(`${dstWormholePath}/${basename}`, {
-        recursive: true,
-        force: true,
-      });
-    }
-
-    // Fix Move.toml file.
-    const moveTomlPath = `${dstWormholePath}/Move.toml`;
-    const moveToml = fs.readFileSync(moveTomlPath, { encoding: "utf-8" });
-    fs.writeFileSync(
-      moveTomlPath,
-      moveToml.replace(`wormhole = "_"`, `wormhole = "0x0"`),
-      { encoding: "utf-8" }
-    );
+  beforeEach("Set Up Environment", () => {
+    setUpWormholeDirectory(srcWormholePath, dstWormholePath);
   });
 
   afterEach("Clean Up Environment", () => {
-    // Clean up Wormhole contract directory.
-    fs.rmSync(dstWormholePath, { recursive: true, force: true });
-
-    // And clear local variables.
-    localVariables.clear();
+    cleanUpPackageDirectory(dstWormholePath);
   });
 
   afterEach("Publish Message Using Latest Package", async () => {
@@ -103,8 +83,8 @@ describe(" 3. Upgradability", () => {
           },
         })
         .then((result) => {
-          let found = result.objectChanges?.filter(
-            (item) => "type" in item && "created" === item.type
+          const found = result.objectChanges?.filter(
+            (item) => "created" === item.type!
           );
           if (found?.length == 1 && "objectId" in found[0]) {
             return found[0].objectId;
@@ -143,14 +123,16 @@ describe(" 3. Upgradability", () => {
         });
       }
 
-      const events = await wallet
-        .signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEvents: true,
-          },
-        })
-        .then((result) => result.events!);
+      const results = await wallet.signAndExecuteTransactionBlock({
+        transactionBlock: tx,
+        options: {
+          showEvents: true,
+          showEffects: true,
+        },
+      });
+      expect(results.effects?.status.status).equals("success");
+
+      const events = results.events!;
       expect(events).has.length(numMessages);
 
       for (let i = 0; i < numMessages; ++i) {
@@ -165,58 +147,402 @@ describe(" 3. Upgradability", () => {
     }
   });
 
-  it("Version 1 -> 2: Upgrade Wormhole with New Feature", async () => {
-    const wormholePackage = await getPackageId(
-      wallet.provider,
-      WORMHOLE_STATE_ID
-    );
+  describe("Expected Failure", () => {
+    const creatorKey = KEYSTORE[2];
 
-    // TODO: Add new feature module.
+    // Persisting variables across tests.
+    const localVariables: Map<string, any> = new Map();
 
-    // Prepare upgrade by generating digest for guardinas to sign.
-    const digest = buildForDigest(dstWormholePath);
-    const signedVaa = generateVaaFromDigest(digest, governance);
+    beforeEach("Build, Publish and Set Up Environment", () => {
+      // Copy Move.toml for devnet.
+      fs.copyFileSync(
+        `${srcWormholePath}/Move.devnet.toml`,
+        `${dstWormholePath}/Move.devnet.toml`
+      );
 
-    // And execute upgrade with governance VAA.
-    const results = await buildAndUpgradeWormhole(
-      wallet,
-      signedVaa,
-      dstWormholePath,
-      WORMHOLE_STATE_ID
-    );
+      const packageId = execSync(
+        `worm sui deploy ${dstWormholePath} -n devnet -k ${creatorKey} 2> /dev/null`,
+        EXEC_UTF8
+      )
+        .matchAll(/Published to (0x[a-z0-9]{64})/g)
+        .next().value[1];
 
-    // Fetch implementation.
-    const latestPackageId = await getPackageId(
-      wallet.provider,
-      WORMHOLE_STATE_ID
-    );
+      // Finally clean up.
+      cleanUpPackageDirectory(dstWormholePath);
 
-    const implementation = results.effects?.created?.find(
-      (item) => item.owner == "Immutable"
-    )!;
-    expect(implementation?.reference.objectId).equals(latestPackageId);
+      // TODO: Initialize wormhole
+      const stateId = execSync(
+        `worm sui init-wormhole -n devnet -k ${creatorKey} -p ${packageId} -i befa429d57cd18b7f8a4d91a2da9ab4af05d0fbe 2> /dev/null`,
+        EXEC_UTF8
+      )
+        .matchAll(/Wormhole state object ID (0x[a-z0-9]{64})/g)
+        .next().value[1];
 
-    // Compare to emitted event.
-    expect(results.events!).has.length(1);
+      localVariables.set("wormholeStateId", stateId);
 
-    const eventData = results.events![0].parsedJson!;
-    expect(eventData.old_contract).equals(wormholePackage);
-    expect(eventData.new_contract).equals(latestPackageId);
+      // Now set up for upgrade.
+      setUpWormholeDirectory(srcWormholePath, dstWormholePath);
+    });
+
+    afterEach("Clean Up Local Variables", () => {
+      localVariables.clear();
+    });
+
+    it("Cannot Migrate After Upgrade w/ Stale CURRENT_BUILD_VERSION", async () => {
+      const wormholeStateId: string = localVariables.get("wormholeStateId");
+
+      const wormholePackage = await getPackageId(
+        wallet.provider,
+        wormholeStateId
+      );
+
+      // Prepare upgrade by generating digest for guardinas to sign.
+      const digest = buildForDigest(dstWormholePath);
+      const signedVaa = generateVaaFromDigest(digest, governance);
+
+      // And execute upgrade with governance VAA.
+      const upgradeResults = await buildAndUpgradeWormhole(
+        wallet,
+        signedVaa,
+        dstWormholePath,
+        wormholeStateId
+      );
+      expect(upgradeResults.effects?.status.status).equals("success");
+
+      // Fetch implementation.
+      const latestPackageId = await getPackageId(
+        wallet.provider,
+        wormholeStateId
+      );
+
+      const implementation = upgradeResults.effects?.created?.find(
+        (item) => item.owner == "Immutable"
+      )!;
+      expect(implementation?.reference.objectId).equals(latestPackageId);
+
+      // Compare to emitted event.
+      expect(upgradeResults.events!).has.length(1);
+
+      const eventData = upgradeResults.events![0].parsedJson!;
+      expect(eventData.old_contract).equals(wormholePackage);
+      expect(eventData.new_contract).equals(latestPackageId);
+
+      // Now migrate.
+      const migrateTicket = await wallet.provider
+        .getDynamicFields({
+          parentId: wormholeStateId,
+        })
+        .then((fields) => fields.data[0].objectType)
+        .catch((error) => {
+          console.log("should not happen", error);
+          return null;
+        });
+      expect(migrateTicket).is.not.null;
+      expect(migrateTicket?.endsWith("MigrateTicket")).is.true;
+
+      // This will fail because the `check_minimum_requirement` is expecting
+      // the hard-coded value to be 2 when it is still 1.
+      const migrateResults = await migrate(wallet, wormholeStateId).catch(
+        (error) => {
+          const abort = parseWormholeError(error.cause.effects.status.error);
+          expect(abort).equals("E_OUTDATED_VERSION");
+
+          return null;
+        }
+      );
+      expect(migrateResults).is.null;
+    });
+
+    it("Cannot Upgrade Using Stale Package", async () => {
+      const wormholeStateId: string = localVariables.get("wormholeStateId");
+
+      const wormholePackage = await getPackageId(
+        wallet.provider,
+        wormholeStateId
+      );
+
+      // Make sure the build's hard-coded version is upticked.
+      modifyHardCodedVersionControl(
+        dstWormholePath,
+        VERSION_WORMHOLE,
+        VERSION_WORMHOLE + 1 // new build version
+      );
+
+      // Prepare upgrade by generating digest for guardinas to sign.
+      const digest = buildForDigest(dstWormholePath);
+      const signedVaa = generateVaaFromDigest(digest, governance);
+
+      // And execute upgrade with governance VAA.
+      const upgradeResults = await buildAndUpgradeWormhole(
+        wallet,
+        signedVaa,
+        dstWormholePath,
+        wormholeStateId
+      );
+      expect(upgradeResults.effects?.status.status).equals("success");
+
+      // And execute again with another VAA. But reference the OG package.
+      modifyHardCodedVersionControl(
+        dstWormholePath,
+        VERSION_WORMHOLE + 1,
+        VERSION_WORMHOLE + 2 // new build version
+      );
+
+      const anotherDigest = buildForDigest(dstWormholePath);
+      const anotherSignedVaa = generateVaaFromDigest(anotherDigest, governance);
+      const tx = new TransactionBlock();
+
+      // Authorize upgrade.
+      const [upgradeTicket] = tx.moveCall({
+        target: `${wormholePackage}::upgrade_contract::authorize_upgrade`,
+        arguments: [
+          tx.object(wormholeStateId),
+          tx.pure(Array.from(anotherSignedVaa)),
+          tx.object(SUI_CLOCK_OBJECT_ID),
+        ],
+      });
+
+      // Build and generate modules and dependencies for upgrade.
+      const { modules, dependencies } = buildForBytecode(dstWormholePath);
+      const [upgradeReceipt] = tx.upgrade({
+        modules,
+        dependencies,
+        packageId: wormholePackage,
+        ticket: upgradeTicket,
+      });
+
+      // Commit upgrade.
+      tx.moveCall({
+        target: `${wormholePackage}::upgrade_contract::commit_upgrade`,
+        arguments: [tx.object(wormholeStateId), upgradeReceipt],
+      });
+
+      // Cannot auto compute gas budget, so we need to configure it manually.
+      // Gas ~215m.
+      tx.setGasBudget(215_000_000n);
+
+      const anotherUpgradeResults = await wallet.signAndExecuteTransactionBlock(
+        {
+          transactionBlock: tx,
+          options: {
+            showEffects: true,
+            showEvents: true,
+          },
+        }
+      );
+      expect(anotherUpgradeResults.effects?.status.status).equals("failure");
+
+      const error = anotherUpgradeResults.effects?.status.error!;
+      expect(error).includes("PackageUpgradeError");
+      expect(error).includes("upgrade_error: PackageIDDoesNotMatch");
+    });
   });
 
-  it("Version 2 -> 3: Upgrade Wormhole with Breaking Change", async () => {
-    const wormholePackage = await getPackageId(
-      wallet.provider,
-      WORMHOLE_STATE_ID
-    );
-    // TODO
-  });
+  describe("Successful Upgrade", () => {
+    it("Add New Feature", async () => {
+      const wormholePackage = await getPackageId(
+        wallet.provider,
+        WORMHOLE_STATE_ID
+      );
 
-  it("Version 3 -> 4: Upgrade Wormhole with Existing Module Modification", async () => {
-    const wormholePackage = await getPackageId(
-      wallet.provider,
-      WORMHOLE_STATE_ID
-    );
-    // TODO
+      // Make sure the build's hard-coded version is upticked.
+      modifyHardCodedVersionControl(
+        dstWormholePath,
+        VERSION_WORMHOLE,
+        VERSION_WORMHOLE + 1 // new build version
+      );
+
+      // TODO: Add new feature module.
+
+      // Prepare upgrade by generating digest for guardinas to sign.
+      const digest = buildForDigest(dstWormholePath);
+      const signedVaa = generateVaaFromDigest(digest, governance);
+
+      // And execute upgrade with governance VAA.
+      const upgradeResults = await buildAndUpgradeWormhole(
+        wallet,
+        signedVaa,
+        dstWormholePath,
+        WORMHOLE_STATE_ID
+      );
+      expect(upgradeResults.effects?.status.status).equals("success");
+
+      // Fetch implementation.
+      const latestPackageId = await getPackageId(
+        wallet.provider,
+        WORMHOLE_STATE_ID
+      );
+
+      const implementation = upgradeResults.effects?.created?.find(
+        (item) => item.owner == "Immutable"
+      )!;
+      expect(implementation?.reference.objectId).equals(latestPackageId);
+
+      // Compare to emitted event.
+      expect(upgradeResults.events!).has.length(1);
+
+      const eventData = upgradeResults.events![0].parsedJson!;
+      expect(eventData.old_contract).equals(wormholePackage);
+      expect(eventData.new_contract).equals(latestPackageId);
+
+      // Now migrate.
+      const migrateTicket = await wallet.provider
+        .getDynamicFields({
+          parentId: WORMHOLE_STATE_ID,
+        })
+        .then((fields) => fields.data[0].objectType)
+        .catch((error) => {
+          console.log("should not happen", error);
+          return null;
+        });
+      expect(migrateTicket).is.not.null;
+      expect(migrateTicket?.endsWith("MigrateTicket")).is.true;
+
+      const migrateResults = await migrate(wallet, WORMHOLE_STATE_ID);
+      const migrateEvents = migrateResults.events!;
+      expect(migrateEvents).has.length(1);
+
+      const migrateEventData = migrateEvents[0].parsedJson!;
+      expect(migrateEventData.version).equals("2");
+    });
+
+    it.skip("Modify Existing Module", async () => {
+      const wormholePackage = await getPackageId(
+        wallet.provider,
+        WORMHOLE_STATE_ID
+      );
+
+      // Make sure the build's hard-coded version is upticked.
+      modifyHardCodedVersionControl(
+        dstWormholePath,
+        VERSION_WORMHOLE,
+        VERSION_WORMHOLE + 2 // new build version (upticked from previous test)
+      );
+
+      // TODO: modify publish message.
+
+      // Prepare upgrade by generating digest for guardinas to sign.
+      const digest = buildForDigest(dstWormholePath);
+      const signedVaa = generateVaaFromDigest(digest, governance);
+
+      // And execute upgrade with governance VAA.
+      const upgradeResults = await buildAndUpgradeWormhole(
+        wallet,
+        signedVaa,
+        dstWormholePath,
+        WORMHOLE_STATE_ID
+      );
+      expect(upgradeResults.effects?.status.status).equals("success");
+
+      // Fetch implementation.
+      const latestPackageId = await getPackageId(
+        wallet.provider,
+        WORMHOLE_STATE_ID
+      );
+
+      const implementation = upgradeResults.effects?.created?.find(
+        (item) => item.owner == "Immutable"
+      )!;
+      expect(implementation?.reference.objectId).equals(latestPackageId);
+
+      // Compare to emitted event.
+      expect(upgradeResults.events!).has.length(1);
+
+      const eventData = upgradeResults.events![0].parsedJson!;
+      expect(eventData.old_contract).equals(wormholePackage);
+      expect(eventData.new_contract).equals(latestPackageId);
+
+      // Now migrate.
+      const migrateTicket = await wallet.provider
+        .getDynamicFields({
+          parentId: WORMHOLE_STATE_ID,
+        })
+        .then((fields) => fields.data[0].objectType)
+        .catch((error) => {
+          console.log("should not happen", error);
+          return null;
+        });
+      expect(migrateTicket).is.not.null;
+      expect(migrateTicket?.endsWith("MigrateTicket")).is.true;
+
+      const migrateResults = await migrate(wallet, WORMHOLE_STATE_ID);
+      const migrateEvents = migrateResults.events!;
+      expect(migrateEvents).has.length(1);
+
+      const migrateEventData = migrateEvents[0].parsedJson!;
+      expect(migrateEventData.version).equals("3");
+
+      // Execute Token Bridge and find new event.
+    });
+
+    it.skip("Add Breaking Change", async () => {
+      const wormholePackage = await getPackageId(
+        wallet.provider,
+        WORMHOLE_STATE_ID
+      );
+
+      // Make sure the build's hard-coded version is upticked.
+      modifyHardCodedVersionControl(
+        dstWormholePath,
+        VERSION_WORMHOLE,
+        VERSION_WORMHOLE + 3 // new build version (upticked from previous test)
+      );
+
+      // TODO: No need to modify publish message. But require that the current
+      // version for publish message be "4" in the migrate module.
+
+      // Prepare upgrade by generating digest for guardinas to sign.
+      const digest = buildForDigest(dstWormholePath);
+      const signedVaa = generateVaaFromDigest(digest, governance);
+
+      // And execute upgrade with governance VAA.
+      const upgradeResults = await buildAndUpgradeWormhole(
+        wallet,
+        signedVaa,
+        dstWormholePath,
+        WORMHOLE_STATE_ID
+      );
+      expect(upgradeResults.effects?.status.status).equals("success");
+
+      // Fetch implementation.
+      const latestPackageId = await getPackageId(
+        wallet.provider,
+        WORMHOLE_STATE_ID
+      );
+
+      const implementation = upgradeResults.effects?.created?.find(
+        (item) => item.owner == "Immutable"
+      )!;
+      expect(implementation?.reference.objectId).equals(latestPackageId);
+
+      // Compare to emitted event.
+      expect(upgradeResults.events!).has.length(1);
+
+      const eventData = upgradeResults.events![0].parsedJson!;
+      expect(eventData.old_contract).equals(wormholePackage);
+      expect(eventData.new_contract).equals(latestPackageId);
+
+      // Now migrate.
+      const migrateTicket = await wallet.provider
+        .getDynamicFields({
+          parentId: WORMHOLE_STATE_ID,
+        })
+        .then((fields) => fields.data[0].objectType)
+        .catch((error) => {
+          console.log("should not happen", error);
+          return null;
+        });
+      expect(migrateTicket).is.not.null;
+      expect(migrateTicket?.endsWith("MigrateTicket")).is.true;
+
+      const migrateResults = await migrate(wallet, WORMHOLE_STATE_ID);
+      const migrateEvents = migrateResults.events!;
+      expect(migrateEvents).has.length(1);
+
+      const migrateEventData = migrateEvents[0].parsedJson!;
+      expect(migrateEventData.version).equals("4");
+
+      // Attempt to execute Token Bridge.
+    });
   });
 });

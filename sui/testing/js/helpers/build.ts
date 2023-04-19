@@ -1,5 +1,8 @@
 import { fromB64, normalizeSuiObjectId } from "@mysten/sui.js";
-import { execSync } from "child_process";
+import { execSync, ExecSyncOptionsWithStringEncoding } from "child_process";
+import { UTF8 } from "./consts";
+
+export const EXEC_UTF8: ExecSyncOptionsWithStringEncoding = { encoding: UTF8 };
 
 export function buildForBytecode(packagePath: string) {
   const buildOutput: {
@@ -8,9 +11,7 @@ export function buildForBytecode(packagePath: string) {
   } = JSON.parse(
     execSync(
       `sui move build --dump-bytecode-as-base64 -p ${packagePath} 2> /dev/null`,
-      {
-        encoding: "utf-8",
-      }
+      EXEC_UTF8
     )
   );
   return {
@@ -24,9 +25,7 @@ export function buildForBytecode(packagePath: string) {
 export function buildForDigest(packagePath: string) {
   const digest = execSync(
     `sui move build --dump-package-digest -p ${packagePath} 2> /dev/null`,
-    {
-      encoding: "utf-8",
-    }
+    EXEC_UTF8
   ).substring(0, 64);
 
   return Buffer.from(digest, "hex");
