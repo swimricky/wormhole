@@ -10,3 +10,4 @@ lto = "thin"
 
 [patch.crates-io]
 serde_wormhole = { path = "serde_wormhole" }
+wormhole-sdk = { path = "core" }
