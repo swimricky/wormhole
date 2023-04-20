@@ -5,6 +5,7 @@ edition = "2021"
 
 [lib]
 name = "wormhole_sdk"
+crate-type = ["cdylib", "rlib"]
 
 [features]
 schemars = ["dep:schemars"]

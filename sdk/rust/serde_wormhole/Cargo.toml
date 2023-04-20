@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Serde data format for VAA payloads"
 
+[lib]
+name = "serde_wormhole"
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 base64 = "0.13"
 itoa = "1.0.1"
